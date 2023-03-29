@@ -43,18 +43,21 @@ public:
     }
 
     bool receive(V2MIDI::Packet *midi) {
-      _data[0] = (uint8_t)Packet::Type::MIDI;
+      if (getType() != Packet::Type::MIDI)
+        return false;
+
       midi->setData(_data + 1);
       return true;
     }
 
     bool send(V2MIDI::Packet *midi) {
+      _data[0] = (uint8_t)Packet::Type::MIDI;
       memcpy(_data + 1, midi->getData(), 4);
       return true;
     }
 
     void getPulse(Pulse *pulse) {
-      pulse->port     = _data[1] & 0x0f;
+      pulse->port    = _data[1] & 0x0f;
       pulse->fadeIn  = _data[1] & (1 << 4);
       pulse->fadeOut = _data[1] & (1 << 5);
 
@@ -120,10 +123,9 @@ public:
       _uart->begin(3000000);
       _uart->setTimeout(1);
 
-      // The transmitter is only enabled during send (consumes power when idle).
       if (_pinTx > 0) {
         pinMode(_pinTx, OUTPUT);
-        digitalWrite(_pinTx, LOW);
+        digitalWrite(_pinTx, HIGH);
       }
     }
 
@@ -161,8 +163,9 @@ public:
 
     bool send(uint8_t address, Packet *packet) {
       if (!_active) {
-        if (_pinTx)
+        if (_pinTx > 0)
           digitalWrite(_pinTx, HIGH);
+
         _active = true;
       }
 
@@ -207,8 +210,8 @@ public:
       if ((unsigned long)(micros() - _usec) < 100 * 1000)
         return;
 
-      if (_pinTx)
-        digitalWrite(_pinTx, LOW);
+      // if (_pinTx > 0)
+      //   digitalWrite(_pinTx, LOW);
 
       _active = false;
     }
