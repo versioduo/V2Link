@@ -210,8 +210,8 @@ public:
       if ((unsigned long)(micros() - _usec) < 100 * 1000)
         return;
 
-      // if (_pinTx > 0)
-      //   digitalWrite(_pinTx, LOW);
+      if (_pinTx > 0)
+        digitalWrite(_pinTx, LOW);
 
       _active = false;
     }
