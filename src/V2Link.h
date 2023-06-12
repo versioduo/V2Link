@@ -217,7 +217,15 @@ public:
     }
   };
 
-  constexpr V2Link(Port *plug, Port *socket) : plug(plug), socket(socket) {}
+  constexpr V2Link(Port *port_, Port *socket_) : plug(port_), socket(socket_) {}
+
+  void begin() {
+    if (plug)
+      plug->begin();
+
+    if (socket)
+      socket->begin();
+  }
 
   void loop() {
     Packet packet;
@@ -260,8 +268,8 @@ public:
     return true;
   }
 
-  Port *plug;
-  Port *socket;
+  Port *plug{};
+  Port *socket{};
 
 protected:
   virtual void receivePlug(Packet *packet) {}
