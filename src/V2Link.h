@@ -1,14 +1,9 @@
-// © Kay Sievers <kay@versioduo.com>, 2020-2023
-// SPDX-License-Identifier: Apache-2.0
-
-#pragma once
-
-// V2 Link devices are full-duplex LVDS serial lines. The impedance is ~120 Ohm,
-// the baud rate is 3 Mhz.
+// V2 Link devices are full-duplex RS485 serial lines, the baud rate is 3 Mhz.
 //
-// The 'plug' connects the device to the parent device, the 'socket' connects
+// The Plug connects the device to the parent device, the socket connects
 // the children devices. Up to 16 devices can be daisy-chained.
 
+#pragma once
 #include <Arduino.h>
 #include <V2MIDI.h>
 
@@ -28,10 +23,10 @@ public:
     //    1 bit: fade out
     struct Pulse {
       uint8_t port;
-      float watts;
-      float seconds;
-      bool fadeIn;
-      bool fadeOut;
+      float   watts;
+      float   seconds;
+      bool    fadeIn;
+      bool    fadeOut;
     };
 
     Type getType() const {
@@ -42,40 +37,40 @@ public:
       return _data[0] >> 4;
     }
 
-    bool receive(V2MIDI::Packet *midi) {
+    bool receive(V2MIDI::Packet* midi) {
       if (getType() != Packet::Type::MIDI)
         return false;
 
-      midi->setData(_data + 1);
+      std::copy(_data + 1, _data + 4, midi->data());
       return true;
     }
 
-    bool send(V2MIDI::Packet *midi) {
-      _data[0] = (uint8_t)Packet::Type::MIDI;
-      memcpy(_data + 1, midi->getData(), 4);
+    bool send(V2MIDI::Packet* midi) {
+      _data[0] = uint8_t(Packet::Type::MIDI);
+      std::copy(midi->data(), midi->data() + 4, _data + 1);
       return true;
     }
 
-    void getPulse(Pulse *pulse) {
+    void getPulse(Pulse* pulse) {
       pulse->port    = _data[1] & 0x0f;
       pulse->fadeIn  = _data[1] & (1 << 4);
       pulse->fadeOut = _data[1] & (1 << 5);
 
       {
-        uint16_t map = (_data[2] >> 4) << 8;
+        auto map{uint16_t((_data[2] >> 4) << 8)};
         map |= _data[3];
-        const float fraction = (float)map / 4095.f;
-        pulse->watts         = 100.f * powf(fraction, 3);
+        auto fraction{float(map) / 4095.f};
+        pulse->watts = 100.f * powf(fraction, 3);
       }
       {
-        uint16_t map = (_data[2] & 0x0f) << 8;
+        auto map{uint16_t((_data[2] & 0x0f) << 8)};
         map |= _data[4];
-        const float fraction = (float)map / 4095.f;
+        const float fraction = float(map) / 4095.f;
         pulse->seconds       = 100.f * powf(fraction, 8);
       }
     }
 
-    void setPulse(const Packet::Pulse *pulse) {
+    void setPulse(const Packet::Pulse* pulse) {
       _data[0] = (uint8_t)Packet::Type::Pulse;
       _data[1] = pulse->port & 0x0f;
       if (pulse->fadeIn)
@@ -84,22 +79,22 @@ public:
         _data[1] |= 1 << 5;
 
       {
-        float watts = pulse->watts;
+        auto watts{pulse->watts};
         if (watts > 100.f)
           watts = 100;
 
-        const float fraction = watts / 100.f;
-        const uint16_t map   = powf(fraction, 1.f / 3.f) * 4095.f;
-        _data[2]             = (map >> 8) << 4;
-        _data[3]             = map & 0xff;
+        auto fraction{watts / 100.f};
+        auto map{uint16_t(powf(fraction, 1.f / 3.f) * 4095.f)};
+        _data[2] = (map >> 8) << 4;
+        _data[3] = map & 0xff;
       }
       {
         float seconds = pulse->seconds;
         if (seconds > 100.f)
           seconds = 100;
 
-        const float fraction = seconds / 100.f;
-        const uint16_t map   = powf(fraction, 1.f / 8.f) * 4095.f;
+        auto fraction{seconds / 100.f};
+        auto map{uint16_t(powf(fraction, 1.f / 8.f) * 4095.f)};
         _data[2] |= map >> 8;
         _data[4] = map & 0xff;
       }
@@ -117,7 +112,7 @@ public:
       uint32_t output{};
     } statistics;
 
-    constexpr Port(Uart *uart, uint8_t pinTx = 0) : _uart(uart), _pinTx(pinTx) {}
+    constexpr Port(Uart* uart, uint8_t pinTx = 0) : _uart(uart), _pinTx(pinTx) {}
 
     void begin() {
       _uart->begin(3000000);
@@ -133,7 +128,7 @@ public:
       return !_active;
     }
 
-    bool receive(Packet *packet) {
+    bool receive(Packet* packet) {
       if (_uart->available() == 0)
         return false;
 
@@ -161,7 +156,7 @@ public:
       return true;
     }
 
-    bool send(uint8_t address, Packet *packet) {
+    bool send(uint8_t address, Packet* packet) {
       if (!_active) {
         if (_pinTx > 0)
           digitalWrite(_pinTx, HIGH);
@@ -183,22 +178,22 @@ public:
       return true;
     }
 
-    bool receive(V2MIDI::Packet *midi) {
+    bool receive(V2MIDI::Packet* midi) {
       return false;
     }
 
-    bool send(V2MIDI::Packet *midi) {
+    bool send(V2MIDI::Packet* midi) {
       Packet packet;
       packet._data[0] = (uint8_t)Packet::Type::MIDI;
-      memcpy(packet._data + 1, midi->getData(), 4);
+      memcpy(packet._data + 1, midi->data(), 4);
       return send(midi->getPort(), &packet);
     }
 
   private:
     friend class V2Link;
-    Uart *_uart;
+    Uart*         _uart;
     const uint8_t _pinTx;
-    bool _active{};
+    bool          _active{};
     unsigned long _timeoutUsec{};
     unsigned long _usec{};
 
@@ -217,7 +212,7 @@ public:
     }
   };
 
-  constexpr V2Link(Port *port_, Port *socket_) : plug(port_), socket(socket_) {}
+  constexpr V2Link(Port* port_, Port* socket_) : plug(port_), socket(socket_) {}
 
   void begin() {
     if (plug)
@@ -237,8 +232,9 @@ public:
           if (socket)
             socket->send(packet.getAddress() - 1, &packet);
 
-        } else
+        } else {
           receivePlug(&packet);
+        }
       }
 
       plug->powerDown();
@@ -268,10 +264,10 @@ public:
     return true;
   }
 
-  Port *plug{};
-  Port *socket{};
+  Port* plug{};
+  Port* socket{};
 
 protected:
-  virtual void receivePlug(Packet *packet) {}
-  virtual void receiveSocket(Packet *packet) {}
+  virtual void receivePlug(Packet* packet) {}
+  virtual void receiveSocket(Packet* packet) {}
 };
