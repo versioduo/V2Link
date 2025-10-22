@@ -41,7 +41,7 @@ public:
       if (getType() != Packet::Type::MIDI)
         return false;
 
-      std::copy(_data + 1, _data + 4, midi->data());
+      std::copy(_data + 1, _data + 5, midi->data());
       return true;
     }
 
